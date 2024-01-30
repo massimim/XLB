@@ -18,6 +18,9 @@ From this preliminary work, we collected the following questions:
 
 - In terms of automatic differentiation, how would it be possible to extend warp capabilities to a multi-GPU setup?
 
+
+Future questions:
+- Access to CUB-style reduction primitives.
 """
 
 import warp as wp
@@ -45,7 +48,8 @@ def target_interface_example(
 
     # the framework should support different grid types
     grid_type = ['dense', 'block', 'multi-resolution']
-
+    # the model should work as a generic interface for Oliver's out-of-core work too
+    out_of_core = False
     grid = ne.Grid(dim=dim,
                    backend=bk,
                    ghost_radius=1,
@@ -53,7 +57,8 @@ def target_interface_example(
                    gridOptions={'blockSize': (4, 4, 4),
                                 'spaceCurve': 'hilbert',
                                 'layout': 'SoA'},
-                   active_mask=active_vox)
+                   active_mask=active_vox,
+                   out_of_core=out_of_core)
 
     velocity_field = grid.new(dtyepe=float, card=3)
 
