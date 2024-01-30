@@ -1,7 +1,129 @@
+"""
+This file has two major functions:
+
+- A 'target_interface_example' that showcases the type of interface we would like to target.
+  The function does not run, but it includes comments to explain the neon mechanism according to the following paper: https://escholarship.org/uc/item/9fz7k633
+
+- A 'main' function that runs a limited version of the Neon runtime.
+  This version's goal is to showcase some of the challenges we have encountered while trying to implement our target interface.
+
+From this preliminary work, we collected the following questions:
+
+- The neon grid is a low-level abstraction, as is the wp.array. Can we design it as a native warp type? This would allow us to manage the field types nicely.
+- Is it possible to have an object-oriented interface for wp.structs?
+
+- Are the following features in the warp roadmap:
+    - User-defined cuda blocks.
+    - User access to CUDA shared memory mechanism.
+
+- In terms of automatic differentiation, how would it be possible to extend warp capabilities to a multi-GPU setup?
+
+"""
+
 import warp as wp
+from typing import Any
+
+
+def target_interface_example(
+):
+    """
+    This function does not run.
+    Its goal is to show the interface we would like to achieve.
+    """
+    import warp as wp
+    import neon as ne
+
+    wp.init()
+
+    devices = [0, 1]
+    dim = wp.vec3i(10, 10, 10)
+
+    def active_vox(idx):
+        return True
+
+    bk = ne.Backend('cuda', devices)
+
+    # the framework should support different grid types
+    grid_type = ['dense', 'block', 'multi-resolution']
+
+    grid = ne.Grid(dim=dim,
+                   backend=bk,
+                   ghost_radius=1,
+                   gridType=grid_type[0],
+                   gridOptions={'blockSize': (4, 4, 4),
+                                'spaceCurve': 'hilbert',
+                                'layout': 'SoA'},
+                   active_mask=active_vox)
+
+    velocity_field = grid.new(dtyepe=float, card=3)
+
+    population_in_field = grid.new(dtyepe=float, card=19)
+    population_out_field = grid.new(dtyepe=float, card=19)
+
+    density_field = grid.new(dtyepe=float, card=1)
+
+    # My_LBM_solver_flag_type is a structure define by the user, a sort of bit field
+    flag_field = grid.new(dtyepe=My_LBM_solver_flag_type, card=1)
+
+    def increase_pressure(idx, f, increase_quantity):
+        # a mechanism to transition from field to partition
+        # and acquire from  the user some information in the computation semantic
+        p_f = ne.use(f, 'map')
+
+        @wp.func
+        def operation(idx, p_f: f.partitionType, increase_quantity):
+            # we would need a mechanism to get the partition type as it is not directly accessible by the user
+            # Alternatively we could use ANY, but it does not help preventing errors
+            print(f"I am cell {f.get_my_location()} and I am increasing my pressure")
+            p_f[idx, 0] += increase_quantity
+
+        return operation
+
+    def laplace_filter(fin, fout):
+        # a mechanism to transition from field to partition
+        # and acquire from  the user some information in the computation semantic
+        p_fin = ne.use(fin, 'stencil:lattice')
+        p_fout = ne.use(fout, 'map')
+
+        @wp.func
+        def laplace_filter_wp(idx, p_in: fin.partitionType, p_out: fin.partitionType):
+            # idx is an opaque type, that identify the current cell
+            # We would need a mechanism (fin.partitionType) to get the partition type as it is not directly accessible by the user
+            # Alternatively we could use ANY, but it does not help preventing errors
+
+            # read_ngh would be a method of the partition to extract the neighbor values
+            # the operator[] is use to write values into the
+            p_out[idx, 0] = p_in.read_ngh(idx, location={0, 0, 1}, card=0)
+            + p_in.read_ngh(idx, location={0, 0, -1}, card=0)
+            + p_in.read_ngh(idx, location={0, 1, 0}, card=0)
+            + p_in.read_ngh(idx, location={0, -1, 0}, card=0)
+            + p_in.read_ngh(idx, location={1, 0, 0}, card=0)
+            + p_in.read_ngh(idx, location={-1, 0, 0}, card=0)
+            - 5 * p_in.read(idx, 0)
+
+    # Containers are a closure of functions and data. Containers generates the kernel code that will call the user warp function
+    # Containers can be launch at any time. The launch of a container is asynchronous launches the same kernel on all the devices, but with different inputs.
+    # The different inputs are the partitions of the fields.
+    increase_pressure_op = grid.new_container(increase_pressure, {'f': density_field, 'increase_quantity': 1.0})
+    laplace_filter_op = grid.new_container(laplace_filter, {'f_in': population_in_field, 'f_out': population_out_field,
+                                                            'increase_quantity': 1.0})
+
+    # The graph is the mechanism that creates the user's application graph and optimizes it.
+    # For example by injecting requires halo updates and synchronizations.
+    # It would be nice to be also able to have operation fusion as optimization.
+    application_graph = ne.ApplicationGraph()
+    application_graph.add_next_operation(increase_pressure_op)
+    application_graph.add_next_operation(laplace_filter_op)
+
+    # Running the graph will execute teh user application on a multi-GPU system
+    application_graph.run(optimization="overlapping_computation_communication", syncStream=0)
+
 
 
 class Backend:
+    """
+    Backend class to handle the different devices.
+    """
     type: str
     ids: list[int]
     device_codes: list[str]
@@ -20,6 +142,10 @@ class Backend:
         pass
 
     def for_each_device(self, foo):
+        """
+        Execute the function foo on each device.
+        The device context for warp is automatically set
+        """
         for idx, device_code in enumerate(self.device_codes):
             wp.set_device(device_code)
             foo(idx, device_code)
@@ -139,10 +265,6 @@ class PartitionDenseGrid_int:
     # pitch: wp.constant(wp.vec3i)
     # card: wp.constant(int)
     # ghost_radius: wp.constant(int)
-    pitch: wp.vec3i
-    card: int
-    ghost_radius: int
-    memory: wp.array(dtype=int)
 
     def set(self, bk: Backend, span: SpanDenseGrid, card: int, ghost_radius: int, device_code: str):
         self.card = card
@@ -163,20 +285,14 @@ def partition_int_operator_get(p: PartitionDenseGrid_int, grid_idx: IdxDenseGrid
 
 
 class FieldDenseGrid_int:
-    dim: wp.vec3i
-    ghost_radius: int
-    bk: Backend
-    host_partition_table: dict[str, list[PartitionDenseGrid_int]]
-    device_partition_table: dict[str, list[PartitionDenseGrid_int]]
-
     def __init__(self,
                  bk: Backend,
                  span_table: dict[str, list[SpanDenseGrid]],
                  card: int,
                  ghost_radius: int):
 
-        self.bk = bk
-        self.ghost_radius = ghost_radius
+        self.bk: Backend = bk
+        self.ghost_radius: int = ghost_radius
         self.host_partition_table: dict[str, list[PartitionDenseGrid_int]] = {}
         self.device_partition_table: dict[str, list[PartitionDenseGrid_int]] = {}
 
@@ -230,16 +346,12 @@ class FieldDenseGrid_int:
 
 
 class GridDense:
-    dim: wp.vec3i
-    span_table: dict[str, list[SpanDenseGrid]]
-    bk: Backend
-    ghost_radius: int
 
     def __init__(self, dim: wp.vec3i, backend: Backend, ghost_radius: int = 1):
-        self.dim = dim
-        self.span_table = {}
-        self.ghost_radius = ghost_radius
-        self.bk = backend
+        self.dim: wp.vec3i = dim
+        self.span_table: dict[str, list[SpanDenseGrid]] = {}
+        self.ghost_radius: int = ghost_radius
+        self.bk: Backend = backend
 
         for data_view in ['standard']:  # , 'internal', 'boundary]:
             self.span_table[data_view] = []
@@ -288,14 +400,14 @@ class Container:
         if host_or_device == 'host':
             raise Exception(f"Work in progress")
 
-    def run(self, stream: int):
+    def run(self, data_view: str, stream: int):
         if self.bk.type == 'cpu':
             # error, through exception
             raise Exception(f"Work in progress")
             pass
         if self.bk.type == 'cuda':
             def run_kernel(idx, device_code):
-                span = self.grid.get_span('standard', idx)
+                span = self.grid.get_span(data_view, idx)
                 input = []
                 for i in self.input_set:
                     input.append(i.get_partition('standard', idx))
@@ -311,15 +423,31 @@ class Container:
 
 def get_kernel_add_one(grid: GridDense,
                        fieldA: FieldDenseGrid_int):
+    @wp.func
+    def my_foo_that_adds_one(idx: Any,
+                             A: Any):
+        """
+        This is the function we would like the user to write.
+        """
+        val = partition_int_operator_get(A, idx, 0)
+        # val = A(idx,0)
+        print("kernel_add_one")
+
+        # instead of this we would like the user to write:
+        # val = A(idx,0)
+        val = val + 1
+        pass
+
     @wp.kernel
     def kernel_add_one(span: SpanDenseGrid,
                        partition: PartitionDenseGrid_int):
+        """
+        This is the function that should be generated by the runtime
+        """
         x, y, z = wp.tid()
-        print("kernel_add_one")
         g_idx = IdxDenseGrid()
         SpanDenseGrid_method_set_idx(span, x, y, z, g_idx)
-        val = partition_int_operator_get(partition, g_idx, 0)
-        val = val + 1
+        my_foo_that_adds_one(g_idx, partition)
         pass
 
     c = Container(wp_kernel=kernel_add_one,
@@ -327,6 +455,16 @@ def get_kernel_add_one(grid: GridDense,
                   input_set=[fieldA],
                   host_or_device='device')
 
+    # NOTE: what we would like to write is:
+    # => grid.new_container(kernel_add_one, [fieldA])
+    # the rest would be handled by the runtime
+    # The execution would than be:
+    # c.run(data_view='standard', stream=0, 'device')
+    #
+    # or better:
+    #
+    # s = Skeleton(a,b,c)
+    # s.run('device', opt='overlapping_computation_communication')
     return c
 
 
@@ -337,17 +475,26 @@ def main():
     dim = wp.vec3i()
     dim[0] = 10
     dim[1] = 10
+    # enforcing the number of z-slices to be multiple of the number of devices
+    # this is a shortcut to simplify the example
     dim[2] = int(4 * len(devices))
 
     print(f"dim {dim}")
 
     bk = Backend('cuda', devices)
     grid = GridDense(dim=dim, backend=bk, ghost_radius=1)
+    # we would acutally want to write something like:
+    # grid = Grid(gtype='dense', dim=dim, backend=bk, ghost_radius=1, dtype=int)
+    # grid = Grid(gtype='block_4_4_4', dim=dim, backend=bk, ghost_radius=1, dtype=int)
     fieldA = grid.new_int_field(card=1)
+    # we would like to write something like:
+    # fieldA = grid.new_field(card=1, dtype=int)
+    # fieldB = grid.new_field(card=1, dtype=double)
+
     print(f"int_field {fieldA}")
 
-    c = get_kernel_add_one(grid, fieldA)
-    c.run(0)
+    my_computation = get_kernel_add_one(grid, fieldA)
+    my_computation.run(data_view='standard', stream=0)
 
 
 if __name__ == '__main__':

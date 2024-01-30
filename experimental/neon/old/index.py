@@ -8,7 +8,13 @@ class Index:
     y: int
     z: int
 
-    def __init__(self, a=0, b=0, c=0):
+    @staticmethod
+    def new(a=0, b=0, c=0):
+        index = Index()
+        index.set(a, b, c)
+        return index
+
+    def set(self, a=0, b=0, c=0):
         self.x = a
         self.y = b
         self.z = c

@@ -3,10 +3,15 @@ import dense as neon_dense
 import warp as wp
 
 
+@wp.struct
 class Span:
-    def __init__(self, dim: ne.Index,
-                 origin: ne.Index,
-                 device_idx: int):
+    dim: ne.Index
+    origin: ne.Index
+    partitionIdx: int
+
+    def set(self, dim: ne.Index,
+            origin: ne.Index,
+            device_idx: int):
         self.dim: ne.Index = dim
         self.origin: ne.Index = origin
         self.partitionIdx: int = device_idx

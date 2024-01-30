@@ -28,14 +28,20 @@ class {class_name}:
     
     def gerTypeName(self):
         return "{dtype_str}"
+        
+    def message(self):
+        return "Partition_{dtype_str}"
+    
+    def operator_brackets(self, idx: neon_dense.Index) :
+        pitch_z: int = self.layout_dim.x * self.layout_dim.y
+        pitch_y: int = self.layout_dim.x
+        return self.memory[idx.x + idx.y * pitch_y + idx.z * pitch_z]
+        
     #
     # def setDefautlValue(self, value: dtype):
     #     self.default_value = value
     #
-    # def operator_brackets(self, idx: neon_dense.Index) :
-    #     pitch_z: int = self.layout_dim.x * self.layout_dim.y
-    #     pitch_y: int = self.layout_dim.x
-    #     return self.memory[idx.x + idx.y * pitch_y + idx.z * pitch_z]
+
     """
     exec(template_generation, globals(), locals())
     PartitionClass = locals()[class_name]
