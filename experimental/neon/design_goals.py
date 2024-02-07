@@ -10,17 +10,33 @@ This file has two major functions:
 From this preliminary work, we collected the following questions:
 
 - The neon grid is a low-level abstraction, as is the wp.array. Can we design it as a native warp type? This would allow us to manage the field types nicely.
+  The following are links to the C++ structures that we would need to represent in warp:
+  - Dense Case
+        - Index: https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/dGrid/dIndex.h
+        - Span https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/dGrid/dSpan.h
+        - Partition: https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/dGrid/dPartition.h
+  - Block Case
+        - Index: https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/bGrid/bIndex.h
+        - Span: https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/bGrid/bSpan.h
+        - Partition: https://github.com/Autodesk/Neon/blob/bGridDisg/libNeonDomain/include/Neon/domain/details/bGrid/bPartition.h
+
 - Is it possible to have an object-oriented interface for wp.structs?
 
 - Are the following features in the warp roadmap:
     - User-defined cuda blocks.
     - User access to CUDA shared memory mechanism.
 
-- In terms of automatic differentiation, how would it be possible to extend warp capabilities to a multi-GPU setup?
 
 
 Future questions:
 - Access to CUB-style reduction primitives.
+
+--------------------------------------------
+Questions for next meeting:
+
+- In terms of automatic differentiation, how would it be possible to extend warp capabilities to a multi-GPU setup?
+- Next steps
+
 """
 
 import warp as wp
