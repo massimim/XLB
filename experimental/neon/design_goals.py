@@ -95,7 +95,7 @@ def target_interface_example(
         def operation(idx, p_f: f.partitionType, increase_quantity):
             # we would need a mechanism to get the partition type as it is not directly accessible by the user
             # Alternatively we could use ANY, but it does not help preventing errors
-            print(f"I am cell {f.get_my_location()} and I am increasing my pressure")
+            print(f"I am cell {f.get_my_location(idx)} and I am increasing my pressure")
             p_f[idx, 0] += increase_quantity
 
         return operation
