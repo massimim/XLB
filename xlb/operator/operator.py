@@ -27,6 +27,8 @@ class Operator:
         # Construct the kernel based backend functions TODO: Maybe move this to the register or something
         if self.compute_backend == ComputeBackend.WARP:
             self.warp_functional, self.warp_kernel = self._construct_warp()
+        if self.compute_backend == ComputeBackend.NEON:
+            self.neon_functional, self.neon_kernel = self._construct_neon()
 
     @classmethod
     def register_backend(cls, backend_name):
@@ -105,6 +107,8 @@ class Operator:
             return self.precision_policy.compute_precision.jax_dtype
         elif self.compute_backend == ComputeBackend.WARP:
             return self.precision_policy.compute_precision.wp_dtype
+        elif self.compute_backend == ComputeBackend.NEON:
+            return self.precision_policy.compute_precision.wp_dtype
 
     @property
     def store_dtype(self):
@@ -115,8 +119,19 @@ class Operator:
             return self.precision_policy.store_precision.jax_dtype
         elif self.compute_backend == ComputeBackend.WARP:
             return self.precision_policy.store_precision.wp_dtype
+        elif self.compute_backend == ComputeBackend.NEON:
+            return self.precision_policy.store_precision.wp_dtype
 
     def _construct_warp(self):
+        """
+        Construct the warp functional and kernel of the operator
+        TODO: Maybe a better way to do this?
+        Maybe add this to the backend decorator?
+        Leave it for now, as it is not clear how the warp backend will evolve
+        """
+        return None, None
+
+    def _construct_neon(self):
         """
         Construct the warp functional and kernel of the operator
         TODO: Maybe a better way to do this?

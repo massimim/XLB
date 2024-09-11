@@ -106,6 +106,10 @@ class QuadraticEquilibrium(Equilibrium):
 
         return functional, kernel
 
+
+    def _construct_neon(self):
+        return self._construct_warp()
+
     @Operator.register_backend(ComputeBackend.WARP)
     def warp_implementation(self, rho, u, f):
         # Launch the warp kernel
@@ -119,3 +123,7 @@ class QuadraticEquilibrium(Equilibrium):
             dim=rho.shape[1:],
         )
         return f
+
+    @Operator.register_backend(ComputeBackend.NEON)
+    def neon_implementation(self, rho, u, f):
+        raise NotImplementedError("NEON backend not implemented for QuadraticEquilibrium")

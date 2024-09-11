@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 
+import py_neon
 from xlb import DefaultConfig
 from xlb.compute_backend import ComputeBackend
 
@@ -15,6 +16,11 @@ def grid_factory(shape: Tuple[int, ...], compute_backend: ComputeBackend = None)
         from xlb.grid.jax_grid import JaxGrid
 
         return JaxGrid(shape)
+
+    elif compute_backend == ComputeBackend.NEON:
+        from xlb.grid.neon_grid import NeonGrid
+        ## FIXME: We would need also to get access to the lattice type to create the neon grid
+        return NeonGrid(shape)
 
     raise ValueError(f"Compute backend {compute_backend} is not supported")
 

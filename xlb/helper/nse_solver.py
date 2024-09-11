@@ -2,7 +2,7 @@ from xlb import DefaultConfig
 from xlb.grid import grid_factory
 from xlb.precision_policy import Precision
 from typing import Tuple
-
+import warp as wp
 
 def create_nse_fields(grid_shape: Tuple[int, int, int], velocity_set=None, compute_backend=None, precision_policy=None):
     velocity_set = velocity_set or DefaultConfig.velocity_set
@@ -13,7 +13,7 @@ def create_nse_fields(grid_shape: Tuple[int, int, int], velocity_set=None, compu
     # Create fields
     f_0 = grid.create_field(cardinality=velocity_set.q, dtype=precision_policy.store_precision)
     f_1 = grid.create_field(cardinality=velocity_set.q, dtype=precision_policy.store_precision)
-    missing_mask = grid.create_field(cardinality=velocity_set.q, dtype=Precision.BOOL)
     boundary_mask = grid.create_field(cardinality=1, dtype=Precision.UINT8)
+    missing_mask = grid.create_field(cardinality=velocity_set.q, dtype=Precision.UINT8)
 
     return grid, f_0, f_1, missing_mask, boundary_mask

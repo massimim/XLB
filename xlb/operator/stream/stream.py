@@ -9,6 +9,8 @@ from typing import Any
 from xlb.compute_backend import ComputeBackend
 from xlb.operator.operator import Operator
 
+import wpne
+
 
 class Stream(Operator):
     """
@@ -58,8 +60,8 @@ class Stream(Operator):
         # Construct the warp functional
         @wp.func
         def functional2d(
-            f: wp.array3d(dtype=Any),
-            index: Any,
+                f: wp.array3d(dtype=Any),
+                index: Any,
         ):
             # Pull the distribution function
             _f = _f_vec()
@@ -82,8 +84,8 @@ class Stream(Operator):
 
         @wp.kernel
         def kernel2d(
-            f_0: wp.array3d(dtype=Any),
-            f_1: wp.array3d(dtype=Any),
+                f_0: wp.array3d(dtype=Any),
+                f_1: wp.array3d(dtype=Any),
         ):
             # Get the global index
             i, j = wp.tid()
@@ -99,8 +101,8 @@ class Stream(Operator):
         # Construct the funcional to get streamed indices
         @wp.func
         def functional3d(
-            f: wp.array4d(dtype=Any),
-            index: Any,
+                f: wp.array4d(dtype=Any),
+                index: Any,
         ):
             # Pull the distribution function
             _f = _f_vec()
@@ -124,8 +126,8 @@ class Stream(Operator):
         # Construct the warp kernel
         @wp.kernel
         def kernel3d(
-            f_0: wp.array4d(dtype=Any),
-            f_1: wp.array4d(dtype=Any),
+                f_0: wp.array4d(dtype=Any),
+                f_1: wp.array4d(dtype=Any),
         ):
             # Get the global index
             i, j, k = wp.tid()
@@ -143,6 +145,124 @@ class Stream(Operator):
 
         return functional, kernel
 
+    def _construct_neon(self):
+        # Set local constants TODO: This is a hack and should be fixed with warp update
+        _c = self.velocity_set.wp_c
+        _f_vec = wp.vec(self.velocity_set.q, dtype=self.compute_dtype)
+
+        # Construct the warp functional
+        @wp.func
+        def functional2d(
+                f: Any,
+                index: Any,
+        ):
+            # Pull the distribution function
+            _f = _f_vec()
+            for l in range(self.velocity_set.q):
+                # Get pull index
+                # pull_index = type(index)()
+                # for d in range(self.velocity_set.d):
+                #     pull_index[d] = index[d] - _c[d, l]
+                #
+                #     # impose periodicity for out of bound values
+                #     if pull_index[d] < 0:
+                #         pull_index[d] = f.shape[d + 1] - 1
+                #     elif pull_index[d] >= f.shape[d + 1]:
+                #         pull_index[d] = 0
+
+                # Read the distribution function
+                # _f[l] = f[l, pull_index[0], pull_index[1]]
+                ngh = wp.neon_ngh_idx(wp.int8(-_c[0, l]),
+                                      wp.int8(0),
+                                      wp.int8(-_c[1, l]))
+                unused_is_valid = wp.bool(False)
+                # How do we get the compute type at this stage?
+                _f[l] = wp.neon_ngh_data(f, index, ngh, l, wp.float(0), unused_is_valid)
+
+            return _f
+
+        @wp.kernel
+        def kernel2d(
+                f_0: wp.array3d(dtype=Any),
+                f_1: wp.array3d(dtype=Any),
+        ):
+            # Get the global index
+            i, j = wp.tid()
+            index = wp.vec2i(i, j)
+
+            # Set the output
+            _f = functional2d(f_0, index)
+
+            # Write the output
+            for l in range(self.velocity_set.q):
+                f_1[l, index[0], index[1]] = _f[l]
+
+        @wpne.Container.factory
+        def container_2d(
+                f_0,
+                f_1,
+        ):
+            def stream_2d(loader: wpne.Loader):
+                loader.declare_execution_scope(f_1.get_grid())
+
+                f0 = loader.get_read_handel(f_0)
+                f1 = loader.get_write_handel(f_1)
+
+                @wp.func
+                def stream_2d_(idx: Any):
+                    _f = functional2d(f0, idx)
+                    for l in range(self.velocity_set.q):
+                        wp.neon_write(f1, idx, l, _f[l])
+            pass
+
+        # Construct the funcional to get streamed indices
+        @wp.func
+        def functional3d(
+                f: wp.array4d(dtype=Any),
+                index: Any,
+        ):
+            # Pull the distribution function
+            _f = _f_vec()
+            for l in range(self.velocity_set.q):
+                # Get pull index
+                pull_index = type(index)()
+                for d in range(self.velocity_set.d):
+                    pull_index[d] = index[d] - _c[d, l]
+
+                    # impose periodicity for out of bound values
+                    if pull_index[d] < 0:
+                        pull_index[d] = f.shape[d + 1] - 1
+                    elif pull_index[d] >= f.shape[d + 1]:
+                        pull_index[d] = 0
+
+                # Read the distribution function
+                _f[l] = f[l, pull_index[0], pull_index[1], pull_index[2]]
+
+            return _f
+
+        # Construct the warp kernel
+        @wp.kernel
+        def kernel3d(
+                f_0: wp.array4d(dtype=Any),
+                f_1: wp.array4d(dtype=Any),
+        ):
+            # Get the global index
+            i, j, k = wp.tid()
+            index = wp.vec3i(i, j, k)
+
+            # Set the output
+            _f = functional3d(f_0, index)
+
+            # Write the output
+            for l in range(self.velocity_set.q):
+                f_1[l, index[0], index[1], index[2]] = _f[l]
+
+        functional = functional3d if self.velocity_set.d == 3 else functional2d
+        kernel = kernel3d if self.velocity_set.d == 3 else kernel2d
+
+        return functional, kernel
+
+
     @Operator.register_backend(ComputeBackend.WARP)
     def warp_implementation(self, f_0, f_1):
         # Launch the warp kernel
@@ -155,3 +275,8 @@ class Stream(Operator):
             dim=f_0.shape[1:],
         )
         return f_1
+
+    @Operator.register_backend(ComputeBackend.NEON)
+    def warp_implementation(self, f_0, f_1):
+        # Launch the warp kernel
+        raise NotImplementedError("NEON backend - not implemented yet")
