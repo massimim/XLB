@@ -532,10 +532,10 @@ class IncompressibleNavierStokesStepper(Stepper):
 
         @wpne.Container.factory
         def container2d(
-                f_0_field: wp.array3d(dtype=Any),
-                f_1_field: wp.array3d(dtype=Any),
-                boundary_mask_field: wp.array3d(dtype=Any),
-                missing_mask_field: wp.array3d(dtype=Any),
+                f_0_field: Any,
+                f_1_field: Any,
+                boundary_mask_field: Any,
+                missing_mask_field: Any,
                 bc_struct: Any,
                 timestep: int,
         ):
