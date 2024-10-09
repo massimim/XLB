@@ -43,6 +43,8 @@ def init(velocity_set, default_backend, default_precision_policy):
 
         wp.build.set_cpp_standard("c++17")
         wp.build.add_include_directory(script_dir)
+        wp.build.add_include_directory(script_dir+"/../testing/Neon/")
+        wp.build.add_include_directory(script_dir+"/../testing/")
         wp.build.add_preprocessor_macro_definition('NEON_WARP_COMPILATION')
 
         # It's a good idea to always clear the kernel cache when developing new native or codegen features

@@ -4,7 +4,7 @@ from xlb.precision_policy import PrecisionPolicy
 from xlb.helper import create_nse_fields, initialize_eq
 from xlb.operator.boundary_masker import IndicesBoundaryMasker
 from xlb.operator.stepper import IncompressibleNavierStokesStepper
-from xlb.operator.boundary_condition import HalfwayBounceBackBC, EquilibriumBC
+from xlb.operator.boundary_condition import HalfwayBounceBackBC, EquilibriumBC, FullwayBounceBackBC
 from xlb.operator.macroscopic import Macroscopic
 from xlb.utils import save_fields_vtk, save_image
 import warp as wp
@@ -48,30 +48,27 @@ class LidDrivenCavity2D:
     def setup_boundary_conditions(self):
         lid, walls = self.define_boundary_indices()
         bc_top = EquilibriumBC(rho=1.0, u=(0.02, 0.0), indices=lid)
-        bc_walls = HalfwayBounceBackBC(indices=walls)
+        bc_walls = FullwayBounceBackBC(indices=walls)
         self.boundary_conditions = [bc_top, bc_walls]
 
     def setup_boundary_masks(self):
-        indices_boundary_masker = IndicesBoundaryMasker(
-            velocity_set=self.velocity_set,
-            precision_policy=self.precision_policy,
-            compute_backend=self.backend,
-        )
-        self.boundary_mask, self.missing_mask = indices_boundary_masker(self.boundary_conditions, self.boundary_mask, self.missing_mask)
+        pass
+        ## Run kernel that set BC type
 
     def initialize_fields(self):
         self.f_0 = initialize_eq(self.f_0, self.grid, self.velocity_set, self.backend)
 
     def setup_stepper(self, omega):
-        self.stepper = IncompressibleNavierStokesStepper(omega, boundary_conditions=self.boundary_conditions)
+        self.stepper = IncompressibleNavierStokesStepper(omega,
+                                                         boundary_conditions=self.boundary_conditions)
 
     def run(self, num_steps, post_process_interval=100):
         for i in range(num_steps):
             self.f_1 = self.stepper(self.f_0, self.f_1, self.boundary_mask, self.missing_mask, i)
             self.f_0, self.f_1 = self.f_1, self.f_0
 
-            if i % post_process_interval == 0 or i == num_steps - 1:
-                self.post_process(i)
+            #if i % post_process_interval == 0 or i == num_steps - 1:
+            #self.post_process(i)
 
     def post_process(self, i):
         # Write the results. We'll use JAX backend for the post-processing
@@ -99,7 +96,7 @@ if __name__ == "__main__":
     # Running the simulation
     grid_size = 500
     grid_shape = (grid_size, grid_size)
-    backend = ComputeBackend.WARP
+    backend = ComputeBackend.NEON
     velocity_set = xlb.velocity_set.D2Q9()
     precision_policy = PrecisionPolicy.FP32FP32
     omega = 1.6
