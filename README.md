@@ -1,12 +1,68 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub star chart](https://img.shields.io/github/stars/Autodesk/XLB?style=social)](https://star-history.com/#Autodesk/XLB)
 <p align="center">
-  <img src="assets/logo-transparent.png" alt="" width="300">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/logo-transparent.png" alt="" width="300">
 </p>
 
 # XLB: A Differentiable Massively Parallel Lattice Boltzmann Library in Python for Physics-Based Machine Learning
 
-XLB is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) library that leverages hardware acceleration. It's built on top of the [JAX](https://github.com/google/jax) library and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning.
+XLB is a fully differentiable 2D/3D Lattice Boltzmann Method (LBM) library that leverages hardware acceleration. It supports [JAX](https://github.com/google/jax), [NVIDIA Warp](https://github.com/NVIDIA/warp), and [Neon](https://github.com/Autodesk/Neon) backends, and is specifically designed to solve fluid dynamics problems in a computationally efficient and differentiable manner. Its unique combination of features positions it as an exceptionally suitable tool for applications in physics-based machine learning. With the Warp backend, XLB offers state-of-the-art single-GPU performance, and with the new Neon backend it extends to multi-GPU (single-resolution). More importantly, the Neon backend provides grid refinement capabilities for multi-resolution simulations.
+
+## Getting Started
+To get started with XLB, you can install it using pip. There are different installation options depending on your hardware and needs:
+
+### Basic Installation (CPU-only)
+```bash
+pip install xlb
+```
+
+### Installation with Warp support (single-GPU)
+For the NVIDIA Warp backend (single-GPU, state-of-the-art performance):
+```bash
+pip install "xlb[warp]"
+```
+
+### Installation with CUDA support (for NVIDIA GPUs)
+This installation is for the JAX backend with CUDA support:
+```bash
+pip install "xlb[cuda]"
+```
+
+### Installation with TPU support
+This installation is for the JAX backend with TPU support:
+```bash
+pip install "xlb[tpu]"
+```
+
+### Installation with Neon support
+Neon backend enables multi-GPU dense and single-GPU multi-resolution representations. 
+Install XLB with Neon support using:
+
+```bash
+git clone https://github.com/Autodesk/XLB.git
+cd XLB
+pip install -r requirements.txt
+pip install '.[neon]'
+```
+
+**Requirements:** The Neon wheel supports **Python 3.11** to **Python 3.14** on **Linux x86_64** and **Linux ARM**. 
+
+**Note:** Neon uses a custom fork of warp.
+
+### Notes:
+- For Mac users: Use the basic CPU installation command as JAX's GPU support is not available on MacOS
+- Use `xlb[warp]` for the Warp backend (single-GPU) or `xlb[neon]` for the Neon backend (multi-GPU / multi-resolution). Do not install both in the same environment.
+- The installation options for CUDA and TPU only affect the JAX backend
+
+To install the latest development version from source:
+
+```bash
+pip install git+https://github.com/Autodesk/XLB.git
+```
+
+The changelog for the releases can be found [here](https://github.com/Autodesk/XLB/blob/main/CHANGELOG.md).
+
+For examples to get you started please refer to the [examples](https://github.com/Autodesk/XLB/tree/main/examples) folder.
 
 ## Accompanying Paper
 
@@ -28,10 +84,36 @@ If you use XLB in your research, please cite the following paper:
 }
 ```
 
+If you use the grid refinement capabilities in your work, please also cite:
+
+```
+@inproceedings{mahmoud2024optimized,
+  title={Optimized {GPU} implementation of grid refinement in lattice {Boltzmann} method},
+  author={Mahmoud, Ahmed H and Salehipour, Hesam and Meneghin, Massimiliano},
+  booktitle={2024 IEEE International Parallel and Distributed Processing Symposium (IPDPS)},
+  pages={398--407},
+  year={2024},
+  organization={IEEE}
+}
+
+@inproceedings{meneghin2022neon,
+  title={Neon: A Multi-{GPU} Programming Model for Grid-based Computations},
+  author={Meneghin, Massimiliano and Mahmoud, Ahmed H. and Jayaraman, Pradeep Kumar and Morris, Nigel J. W.},
+  booktitle={Proceedings of the 36th IEEE International Parallel and Distributed Processing Symposium},
+  pages={817--827},
+  year={2022},
+  month={june},
+  doi={10.1109/IPDPS53621.2022.00084},
+  url={https://escholarship.org/uc/item/9fz7k633}
+}
+```
+
 ## Key Features
+- **Multiple Backend Support:** XLB includes support for JAX, NVIDIA Warp, and Neon backends, providing *state-of-the-art* performance for lattice Boltzmann simulations. The Warp backend targets single-GPU runs, while the Neon backend enables multi-GPU single-resolution and single-GPU multi-resolution simulations.
+- **Multi-Resolution Grid Refinement:** Mesh refinement with nested cuboid grids and multiple kernel-fusion strategies for optimal performance on the Neon backend.
 - **Integration with JAX Ecosystem:** The library can be easily integrated with JAX's robust ecosystem of machine learning libraries such as [Flax](https://github.com/google/flax), [Haiku](https://github.com/deepmind/dm-haiku), [Optax](https://github.com/deepmind/optax), and many more.
 - **Differentiable LBM Kernels:** XLB provides differentiable LBM kernels that can be used in differentiable physics and deep learning applications.
-- **Scalability:** XLB is capable of scaling on distributed multi-GPU systems, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
+- **Scalability:** XLB is capable of scaling on distributed multi-GPU systems using the JAX backend or the Neon backend, enabling the execution of large-scale simulations on hundreds of GPUs with billions of cells.
 - **Support for Various LBM Boundary Conditions and Kernels:** XLB supports several LBM boundary conditions and collision kernels.
 - **User-Friendly Interface:** Written entirely in Python, XLB emphasizes a highly accessible interface that allows users to extend the library with ease and quickly set up and run new simulations.
 - **Leverages JAX Array and Shardmap:** The library incorporates the new JAX array unified array type and JAX shardmap, providing users with a numpy-like interface. This allows users to focus solely on the semantics, leaving performance optimizations to the compiler.
@@ -40,9 +122,16 @@ If you use XLB in your research, please cite the following paper:
 
 ## Showcase
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/wind_turbine.gif" alt="Wind Turbine Simulation" width="800">
+</p>
+<p align="center">
+  Simulation of a wind turbine based on the immersed boundary method.
+</p>
+
 
 <p align="center">
-  <img src="assets/airfoil.gif" width="800">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/airfoil.gif" width="800">
 </p>
 <p align="center">
   On GPU in-situ rendering using <a href="https://github.com/loliverhennigh/PhantomGaze">PhantomGaze</a> library (no I/O). Flow over a NACA airfoil using KBC Lattice Boltzmann Simulation with ~10 million cells.
@@ -50,21 +139,21 @@ If you use XLB in your research, please cite the following paper:
 
 
 <p align="center">
-  <img src="assets/car.png" alt="" width="500">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/car.png" alt="" width="500">
 </p>
 <p align="center">
 <a href=https://www.epc.ed.tum.de/en/aer/research-groups/automotive/drivaer > DrivAer model </a> in a wind-tunnel using KBC Lattice Boltzmann Simulation with approx. 317 million cells
 </p>
 
 <p align="center">
-  <img src="assets/building.png" alt="" width="700">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/building.png" alt="" width="700">
 </p>
 <p align="center">
-  Airflow in to, out of, and within a building (~400 million cells)
+  Airflow into, out of, and within a building (~400 million cells)
 </p>
 
 <p align="center">
-  <img src="assets/XLB_diff.png" alt="" width="900">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/XLB_diff.png" alt="" width="900">
 </p>
 <p align="center">
 The stages of a fluid density field from an initial state to the emergence of the "XLB" pattern through deep learning optimization at timestep 200 (see paper for details)
@@ -73,7 +162,7 @@ The stages of a fluid density field from an initial state to the emergence of th
 <br>
 
 <p align="center">
-  <img src="assets/cavity.gif" alt="" width="500">
+  <img src="https://raw.githubusercontent.com/autodesk/xlb/main/assets/cavity.gif" alt="" width="500">
 </p>
 <p align="center">
   Lid-driven Cavity flow at Re=100,000 (~25 million cells)
@@ -85,6 +174,7 @@ The stages of a fluid density field from an initial state to the emergence of th
 
 - BGK collision model (Standard LBM collision model)
 - KBC collision model (unconditionally stable for flows with high Reynolds number)
+- Smagorinsky LES sub-grid model for turbulence modelling
 
 ### Machine Learning
 
@@ -99,21 +189,26 @@ The stages of a fluid density field from an initial state to the emergence of th
 - D3Q27 (Must be used for KBC simulation runs)
 
 ### Compute Capabilities
-- Distributed Multi-GPU support
+- Single GPU support for the Warp backend with state-of-the-art performance
+- Multi-GPU support using the Neon backend with single-resolution grids
+- Grid refinement support on single-GPU using the Neon backend
+- Distributed Multi-GPU support using the JAX backend
 - Mixed-Precision support (store vs compute)
+- Multiple kernel-fusion performance strategies for multi-resolution simulations
 - Out-of-core support (coming soon)
 
 ### Output
 
 - Binary and ASCII VTK output (based on PyVista library)
+- HDF5/XDMF output for multi-resolution data (with gzip compression)
 - In-situ rendering using [PhantomGaze](https://github.com/loliverhennigh/PhantomGaze) library
 - [Orbax](https://github.com/google/orbax)-based distributed asynchronous checkpointing
-- Image Output
+- Image Output (including multi-resolution slice images)
 - 3D mesh voxelizer using trimesh
 
 ### Boundary conditions
 
-- **Equilibrium BC:** In this boundary condition, the fluid populations are assumed to be in at equilibrium. Can be used to set prescribed velocity or pressure.
+- **Equilibrium BC:** In this boundary condition, the fluid populations are assumed to be at equilibrium. Can be used to set prescribed velocity or pressure.
 
 - **Full-Way Bounceback BC:** In this boundary condition, the velocity of the fluid populations is reflected back to the fluid side of the boundary, resulting in zero fluid velocity at the boundary.
 
@@ -125,50 +220,22 @@ The stages of a fluid density field from an initial state to the emergence of th
 - **Regularized BC:** This boundary condition is used to impose a prescribed velocity or pressure profile at the boundary. This BC is more stable than Zouhe BC, but computationally more expensive.
 - **Extrapolation Outflow BC:** A type of outflow boundary condition that uses extrapolation to avoid strong wave reflections.
 
-- **Interpolated Bounceback BC:** Interpolated bounce-back boundary condition due to Bouzidi for a lattice Boltzmann method simulation.
+- **Interpolated Bounceback BC:** Interpolated bounce-back boundary condition for representing curved boundaries.
 
-## Installation Guide
+- **Hybrid BC:** Combines regularized and bounce-back methods with optional wall-distance interpolation for improved accuracy on curved geometries.
 
-To use XLB, you must first install JAX and other dependencies using the following commands:
-
-
-Please refer to https://github.com/google/jax for the latest installation documentation. The following table is taken from [JAX's Github page](https://github.com/google/jax).
-
-| Hardware   | Instructions                                                                                                    |
-|------------|-----------------------------------------------------------------------------------------------------------------|
-| CPU        | `pip install -U "jax[cpu]"`                                                                                       |
-| NVIDIA GPU on x86_64 | `pip install -U "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`        |
-| Google TPU | `pip install -U "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html`                 |
-| AMD GPU    | Use [Docker](https://hub.docker.com/r/rocm/jax) or [build from source](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-a-rocm-jaxlib-for-amd-gpus). |
-| Apple GPU  | Follow [Apple's instructions](https://developer.apple.com/metal/jax/).                                          |
-
-**Note:** We encountered challenges when executing XLB on Apple GPUs due to the lack of support for certain operations in the Metal backend. We advise using the CPU backend on Mac OS. We will be testing XLB on Apple's GPUs in the future and will update this section accordingly.
-
-
-Install dependencies:
-```bash
-pip install pyvista numpy matplotlib Rtree trimesh jmp orbax-checkpoint termcolor
-```
-
-Run an example:
-```bash
-git clone https://github.com/Autodesk/XLB
-cd XLB
-export PYTHONPATH=.
-python3 examples/CFD/cavity2d.py
-```
 ## Roadmap
+
+### Recently Completed
+
+ - ✅ **Grid Refinement:** Multi-resolution LBM with nested cuboid grids and multiple kernel-fusion strategies via the Neon backend.
+
+ - ✅ **Multi-GPU Acceleration using [Neon](https://github.com/Autodesk/Neon) + Warp:** Multi-GPU support through Neon's data structures with Warp-based kernels for single-resolution settings.
 
 ### Work in Progress (WIP)
 *Note: Some of the work-in-progress features can be found in the branches of the XLB repository. For contributions to these features, please reach out.*
 
-- 🚀 **Warp Backend:** Achieving state-of-the-art performance by leveraging the [Warp](https://github.com/NVIDIA/warp) framework in combination with JAX.
-
- - 🌐 **Grid Refinement:** Implementing adaptive mesh refinement techniques for enhanced simulation accuracy.
-
-- ⚡ **Multi-GPU Acceleration using [Neon](https://github.com/Autodesk/Neon) + Warp:** Using Neon's data structure for improved scaling.
-
-- 💾 **Out-of-Core Computations:** Enabling simulations that exceed available GPU memory, suitable for CPU+GPU coherent memory models such as NVIDIA's Grace Superchips.
+ - 💾 **Out-of-Core Computations:** Enabling simulations that exceed available GPU memory, suitable for CPU+GPU coherent memory models such as NVIDIA's Grace Superchips (coming soon).
 
 - 🗜️ **GPU Accelerated Lossless Compression and Decompression**: Implementing high-performance lossless compression and decompression techniques for larger-scale simulations and improved performance.
 

@@ -1,0 +1,113 @@
+from functools import partial
+import jax.numpy as jnp
+from jax import jit
+import warp as wp
+from typing import Any
+
+from xlb.compute_backend import ComputeBackend
+from xlb.operator.operator import Operator
+from xlb.operator.macroscopic.zero_moment import ZeroMoment
+from xlb.operator.macroscopic.first_moment import FirstMoment
+
+
+class Macroscopic(Operator):
+    """A class to compute both zero and first moments of distribution functions (rho, u)."""
+
+    def __init__(self, *args, **kwargs):
+        self.zero_moment = ZeroMoment(*args, **kwargs)
+        self.first_moment = FirstMoment(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+
+    @Operator.register_backend(ComputeBackend.JAX)
+    @partial(jit, static_argnums=(0), inline=True)
+    def jax_implementation(self, f, rho=None, u=None):
+        rho = self.zero_moment(f)
+        u = self.first_moment(f, rho)
+        return rho, u
+
+    def _construct_warp(self):
+        _f_vec = wp.vec(self.velocity_set.q, dtype=self.compute_dtype)
+
+        @wp.func
+        def functional(f: _f_vec):
+            rho = self.zero_moment.warp_functional(f)
+            u = self.first_moment.warp_functional(f, rho)
+            return rho, u
+
+        @wp.kernel
+        def kernel(
+            f: wp.array4d(dtype=Any),
+            rho: wp.array4d(dtype=Any),
+            u: wp.array4d(dtype=Any),
+        ):
+            i, j, k = wp.tid()
+            index = wp.vec3i(i, j, k)
+
+            _f = _f_vec()
+            for l in range(self.velocity_set.q):
+                _f[l] = f[l, index[0], index[1], index[2]]
+            _rho, _u = functional(_f)
+
+            rho[0, index[0], index[1], index[2]] = self.store_dtype(_rho)
+            for d in range(self.velocity_set.d):
+                u[d, index[0], index[1], index[2]] = self.store_dtype(_u[d])
+
+        return functional, kernel
+
+    @Operator.register_backend(ComputeBackend.WARP)
+    def warp_implementation(self, f, rho, u):
+        wp.launch(
+            self.warp_kernel,
+            inputs=[f, rho, u],
+            dim=rho.shape[1:],
+        )
+        return rho, u
+
+    def _construct_neon(self):
+        import neon
+
+        # Redefine the zero and first moment operators for the neon backend
+        # This is because the neon backend relies on the warp functionals for its operations.
+        self.zero_moment = ZeroMoment(compute_backend=ComputeBackend.WARP)
+        self.first_moment = FirstMoment(compute_backend=ComputeBackend.WARP)
+        functional, _ = self._construct_warp()
+
+        # Set local vectors
+        _f_vec = wp.vec(self.velocity_set.q, dtype=self.compute_dtype)
+
+        @neon.Container.factory("macroscopic")
+        def container(
+            f_field: Any,
+            rho_field: Any,
+            u_fild: Any,
+        ):
+            _d = self.velocity_set.d
+
+            def macroscopic_ll(loader: neon.Loader):
+                loader.set_grid(f_field.get_grid())
+
+                rho = loader.get_read_handle(rho_field)
+                u = loader.get_read_handle(u_fild)
+                f = loader.get_read_handle(f_field)
+
+                @wp.func
+                def macroscopic_cl(gIdx: Any):
+                    _f = _f_vec()
+                    for l in range(self.velocity_set.q):
+                        _f[l] = self.compute_dtype(wp.neon_read(f, gIdx, l))
+                    _rho, _u = functional(_f)
+                    wp.neon_write(rho, gIdx, 0, self.store_dtype(_rho))
+                    for d in range(_d):
+                        wp.neon_write(u, gIdx, d, self.store_dtype(_u[d]))
+
+                loader.declare_kernel(macroscopic_cl)
+
+            return macroscopic_ll
+
+        return functional, container
+
+    @Operator.register_backend(ComputeBackend.NEON)
+    def neon_implementation(self, f, rho, u):
+        c = self.neon_container(f, rho, u)
+        c.run(0)
+        return rho, u
