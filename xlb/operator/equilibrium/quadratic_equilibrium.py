@@ -103,7 +103,8 @@ class QuadraticEquilibrium(Equilibrium):
         return f
 
     def _construct_neon(self):
-        import neon
+        # NEON is the public backend name; Carbon is the implementation underneath.
+        import carbon
 
         # Use the warp functional for the NEON backend
         functional, _ = self._construct_warp()
@@ -111,13 +112,13 @@ class QuadraticEquilibrium(Equilibrium):
         # Set local constants TODO: This is a hack and should be fixed with warp update
         _u_vec = wp.vec(self.velocity_set.d, dtype=self.compute_dtype)
 
-        @neon.Container.factory(name="QuadraticEquilibrium")
+        @carbon.kernel(name="QuadraticEquilibrium")
         def container(
             rho: Any,
             u: Any,
             f: Any,
         ):
-            def quadratic_equilibrium_ll(loader: neon.Loader):
+            def quadratic_equilibrium_ll(loader: carbon.Loader):
                 loader.set_grid(rho.get_grid())
                 rho_pn = loader.get_read_handle(rho)
                 u_pn = loader.get_read_handle(u)
@@ -143,8 +144,6 @@ class QuadraticEquilibrium(Equilibrium):
 
     @Operator.register_backend(ComputeBackend.NEON)
     def neon_implementation(self, rho, u, f):
-        import neon
-
         c = self.neon_container(rho, u, f)
-        c.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        c.run(0)
         return f

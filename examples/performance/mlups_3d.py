@@ -101,10 +101,10 @@ Examples:
             print("[INFO] No GPU devices specified. Using default device 0.")
             args.gpu_devices = [0]
 
-        import neon
+        import carbon
 
-        occ_enum = neon.SkeletonConfig.OCC.from_string(args.occ)
-        args.occ_enum = occ_enum  # Store the enum for Neon
+        occ_enum = carbon.SkeletonConfig.OCC.from_string(args.occ)
+        args.occ_enum = occ_enum  # Store the enum for the Carbon skeleton
         args.occ_display = args.occ  # Store the original string for display
     else:
         if args.gpu_devices is not None:
@@ -432,10 +432,10 @@ def print_scalability_summary(args, stats_list):
 
 
 def report(args, stats):
-    import neon
+    import carbon
     import sys
 
-    report = neon.Report("LBM MLUPS LDC")
+    report = carbon.Report("LBM MLUPS LDC")
 
     # Save the full command line
     command_line = " ".join(sys.argv)

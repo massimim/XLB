@@ -499,24 +499,24 @@ class EncodeAuxiliaryData(Operator):
         return functional_dict, kernel
 
     def _construct_neon(self):
-        import neon
+        import carbon
 
         """
-        Constructs the Neon container for encoding auxiliary data recovery.
+        Constructs the Carbon container for encoding auxiliary data recovery.
         """
-        # Use the warp functional for the Neon backend
+        # Use the warp functional for the Carbon backend
         functional_dict, _ = self._construct_warp()
         encoder_functional = functional_dict["encoder"]
         _id = self.boundary_id
 
-        # Construct the Neon container
-        @neon.Container.factory(name="EncodingAuxData_" + str(_id))
+        # Construct the Carbon container
+        @carbon.kernel(name="EncodingAuxData_" + str(_id))
         def aux_data_init_container(
             f_1: Any,
             bc_mask: Any,
             missing_mask: Any,
         ):
-            def aux_data_init_ll(loader: neon.Loader):
+            def aux_data_init_ll(loader: carbon.Loader):
                 loader.set_grid(f_1.get_grid())
 
                 f_1_pn = loader.get_write_handle(f_1)
@@ -555,10 +555,8 @@ class EncodeAuxiliaryData(Operator):
 
     @Operator.register_backend(ComputeBackend.NEON)
     def neon_implementation(self, f_1, bc_mask, missing_mask):
-        import neon
-
         c = self.neon_container(f_1, bc_mask, missing_mask)
-        c.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        c.run(0)
         return f_1
 
 

@@ -64,7 +64,8 @@ class Macroscopic(Operator):
         return rho, u
 
     def _construct_neon(self):
-        import neon
+        # NEON is the public backend name; Carbon is the implementation underneath.
+        import carbon
 
         # Redefine the zero and first moment operators for the neon backend
         # This is because the neon backend relies on the warp functionals for its operations.
@@ -75,7 +76,7 @@ class Macroscopic(Operator):
         # Set local vectors
         _f_vec = wp.vec(self.velocity_set.q, dtype=self.compute_dtype)
 
-        @neon.Container.factory("macroscopic")
+        @carbon.kernel("macroscopic")
         def container(
             f_field: Any,
             rho_field: Any,
@@ -83,7 +84,7 @@ class Macroscopic(Operator):
         ):
             _d = self.velocity_set.d
 
-            def macroscopic_ll(loader: neon.Loader):
+            def macroscopic_ll(loader: carbon.Loader):
                 loader.set_grid(f_field.get_grid())
 
                 rho = loader.get_read_handle(rho_field)

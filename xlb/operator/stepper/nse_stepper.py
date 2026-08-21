@@ -476,7 +476,8 @@ class IncompressibleNavierStokesStepper(Stepper):
         return f_0, f_1
 
     def _construct_neon(self):
-        import neon
+        # NEON is the public backend name; Carbon is the implementation underneath.
+        import carbon
 
         # Set local constants
         _f_vec = wp.vec(self.velocity_set.q, dtype=self.compute_dtype)
@@ -569,7 +570,7 @@ class IncompressibleNavierStokesStepper(Stepper):
                                 _f1_thread = wp.neon_read(f_1_pn, index, _opp_indices[l])
                                 wp.neon_write(f_0_pn, index, _opp_indices[l], self.store_dtype(_f1_thread))
 
-        @neon.Container.factory(name="nse_stepper")
+        @carbon.kernel(name="nse_stepper")
         def container(
             f_0_fd: Any,
             f_1_fd: Any,
@@ -578,13 +579,13 @@ class IncompressibleNavierStokesStepper(Stepper):
             omega: Any,
             timestep: int,
         ):
-            def nse_stepper_ll(loader: neon.Loader):
+            def nse_stepper_ll(loader: carbon.Loader):
                 loader.set_grid(bc_mask_fd.get_grid())
 
                 f_0_pn = loader.get_read_handle(
                     f_0_fd,
-                    operation=neon.Loader.Operation.stencil,
-                    discretization=neon.Loader.Discretization.lattice,
+                    operation=carbon.Loader.Operation.stencil,
+                    discretization=carbon.Loader.Discretization.lattice,
                 )
                 bc_mask_pn = loader.get_read_handle(bc_mask_fd)
                 missing_mask_pn = loader.get_read_handle(missing_mask_fd)
@@ -636,28 +637,28 @@ class IncompressibleNavierStokesStepper(Stepper):
         return f_0, f_1
 
     def prepare_skeleton(self, f_0, f_1, bc_mask, missing_mask, omega):
-        """Build the Neon odd/even skeletons for double-buffered time stepping."""
-        import neon
+        """Build the Carbon odd/even skeletons for double-buffered time stepping."""
+        import carbon
 
         grid = f_0.get_grid()
-        bk = grid.backend
+        system = grid.system
         self.neon_skeleton = {"odd": {}, "even": {}}
         self.neon_skeleton["odd"]["container"] = self.neon_container(f_0, f_1, bc_mask, missing_mask, omega, 0)
         self.neon_skeleton["even"]["container"] = self.neon_container(f_1, f_0, bc_mask, missing_mask, omega, 1)
         # check if 'occ' is a valid key
         if "occ" not in self.backend_config:
-            occ = neon.SkeletonConfig.OCC.none()
+            occ = carbon.SkeletonConfig.OCC.none()
         else:
             occ = self.backend_config["occ"]
-            # check that occ is of type neon.SkeletonConfig.OCC
-            if not isinstance(occ, neon.SkeletonConfig.OCC):
+            # check that occ is of type carbon.SkeletonConfig.OCC
+            if not isinstance(occ, carbon.SkeletonConfig.OCC):
                 print(type(occ))
-                raise ValueError("occ must be of type neon.SkeletonConfig.OCC")
+                raise ValueError("occ must be of type carbon.SkeletonConfig.OCC")
 
         for key in self.neon_skeleton:
             self.neon_skeleton[key]["app"] = [self.neon_skeleton[key]["container"]]
-            self.neon_skeleton[key]["skeleton"] = neon.Skeleton(backend=bk)
-            self.neon_skeleton[key]["skeleton"].sequence(name="mres_nse_stepper", containers=self.neon_skeleton[key]["app"], occ=occ)
+            self.neon_skeleton[key]["skeleton"] = carbon.Skeleton(system)
+            self.neon_skeleton[key]["skeleton"].sequence(name="nse_stepper", containers=self.neon_skeleton[key]["app"], occ=occ)
 
         self.sk = [self.neon_skeleton["odd"]["skeleton"], self.neon_skeleton["even"]["skeleton"]]
         self.sk_iter = 0

@@ -416,7 +416,13 @@ class IndicesBoundaryMasker(Operator):
         return bc_mask, missing_mask
 
     def _construct_neon(self):
-        import neon
+        # NEON is the public backend name; Carbon is the implementation underneath.
+        # NOTE: the loading-lambda bodies below still use Neon-only multi-device APIs
+        # (grid.backend / get_num_devices / loader.get_device_id); they are exercised
+        # only when a boundary condition is present. The single-res no-BC path builds
+        # this masker but never invokes it, so construction just needs the carbon.kernel
+        # factories. Full masker port lands with the boundary-condition workstream.
+        import carbon
 
         # Use the warp functional for the NEON backend
         functional_dict, _ = self._construct_warp()
@@ -424,7 +430,7 @@ class IndicesBoundaryMasker(Operator):
         functional_interior_bc_mask = functional_dict.get("functional_interior_bc_mask")
         functional_interior_missing_mask = functional_dict.get("functional_interior_missing_mask")
 
-        @neon.Container.factory(name="IndicesBoundaryMasker_DomainBounds")
+        @carbon.kernel(name="IndicesBoundaryMasker_DomainBounds")
         def container_domain_bounds(
             wp_bc_indices_,
             wp_id_numbers_,
@@ -433,7 +439,7 @@ class IndicesBoundaryMasker(Operator):
             missing_mask,
             grid_shape,
         ):
-            def domain_bounds_launcher(loader: neon.Loader):
+            def domain_bounds_launcher(loader: carbon.Loader):
                 loader.set_grid(bc_mask.get_grid())
                 bc_mask_pn = loader.get_write_handle(bc_mask)
                 missing_mask_pn = loader.get_write_handle(missing_mask)
@@ -467,13 +473,13 @@ class IndicesBoundaryMasker(Operator):
 
             return domain_bounds_launcher
 
-        @neon.Container.factory(name="IndicesBoundaryMasker_InteriorBcMask")
+        @carbon.kernel(name="IndicesBoundaryMasker_InteriorBcMask")
         def container_interior_bc_mask(
             wp_bc_indices,
             wp_id_numbers,
             bc_mask,
         ):
-            def interior_bc_mask_launcher(loader: neon.Loader):
+            def interior_bc_mask_launcher(loader: carbon.Loader):
                 loader.set_grid(bc_mask.get_grid())
                 bc_mask_pn = loader.get_write_handle(bc_mask)
 
@@ -491,14 +497,14 @@ class IndicesBoundaryMasker(Operator):
 
             return interior_bc_mask_launcher
 
-        @neon.Container.factory(name="IndicesBoundaryMasker_InteriorMissingMask")
+        @carbon.kernel(name="IndicesBoundaryMasker_InteriorMissingMask")
         def container_interior_missing_mask(
             wp_bc_indices,
             bc_mask,
             missing_mask,
             grid_shape,
         ):
-            def interior_bc_mask_launcher(loader: neon.Loader):
+            def interior_bc_mask_launcher(loader: carbon.Loader):
                 loader.set_grid(bc_mask.get_grid())
                 bc_mask_pn = loader.get_write_handle(bc_mask)
                 missing_mask_pn = loader.get_write_handle(missing_mask)
@@ -528,8 +534,7 @@ class IndicesBoundaryMasker(Operator):
 
     @Operator.register_backend(ComputeBackend.NEON)
     def neon_implementation(self, bclist, bc_mask, missing_mask, start_index=None):
-        import neon
-
+        # NEON is the public backend name; Carbon runs the containers underneath.
         # get the grid shape
         grid_shape = self.helper_masker.get_grid_shape(bc_mask)
 
@@ -548,7 +553,7 @@ class IndicesBoundaryMasker(Operator):
             missing_mask,
             grid_shape,
         )
-        container_domain_bounds.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        container_domain_bounds.run(0)
 
         # If there are no interior boundary conditions, skip the rest and retun early
         if not bc_interior:
@@ -559,7 +564,7 @@ class IndicesBoundaryMasker(Operator):
         # Note 2: Due to race conditioning, the two kernels cannot be fused together.
         wp_bc_indices, wp_id_numbers, _ = self._prepare_kernel_inputs(bc_interior, grid_shape)
         container_interior_missing_mask = self.neon_container["container_interior_missing_mask"](wp_bc_indices, bc_mask, missing_mask, grid_shape)
-        container_interior_missing_mask.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        container_interior_missing_mask.run(0)
 
         # Launch the third container
         container_interior_bc_mask = self.neon_container["container_interior_bc_mask"](
@@ -567,6 +572,6 @@ class IndicesBoundaryMasker(Operator):
             wp_id_numbers,
             bc_mask,
         )
-        container_interior_bc_mask.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        container_interior_bc_mask.run(0)
 
         return bc_mask, missing_mask

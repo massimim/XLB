@@ -33,6 +33,9 @@ class DefaultConfig:
     default_precision_policy = None
     velocity_set = None
     default_backend = None
+    # Carbon runtime handle, populated when ``default_backend == ComputeBackend.NEON``.
+    # (The public enum name stays NEON; the implementation underneath is Carbon.)
+    carbon_gate = None
 
 
 def _warp_init_and_select_cuda_device():
@@ -78,13 +81,9 @@ def init(velocity_set, default_backend, default_precision_policy):
     if default_backend == ComputeBackend.WARP:
         _warp_init_and_select_cuda_device()
     elif default_backend == ComputeBackend.NEON:
+        # NEON is the public name; Carbon is the implementation underneath.
         import warp as wp
-        import neon
-
-        # wp.config.mode = "release"
-        # wp.config.llvm_cuda = False
-        # wp.config.verbose = True
-        # wp.verbose_warnings = True
+        import carbon
 
         _warp_init_and_select_cuda_device()
 
@@ -92,7 +91,8 @@ def init(velocity_set, default_backend, default_precision_policy):
         wp.build.clear_kernel_cache()
 
         # !!! DO THIS BEFORE DEFINING/USING ANY KERNELS WITH CUSTOM TYPES
-        neon.init()
+        DefaultConfig.carbon_gate = carbon.init(enable_warp=True)
+        carbon.install_neon_aliases()
 
     elif default_backend == ComputeBackend.JAX:
         check_backend_support()

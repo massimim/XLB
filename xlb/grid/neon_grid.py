@@ -1,12 +1,13 @@
 """
-Single-resolution dense grid backed by the Neon multi-GPU runtime.
+Single-resolution dense grid backed by the Carbon multi-GPU runtime.
 
-This module wraps ``neon.dense.dGrid`` and exposes it through the
-:class:`Grid` interface so that XLB operators can allocate and operate on
-fields transparently.
+This module wraps ``carbon.Dense`` and exposes it through the :class:`Grid`
+interface so that XLB operators can allocate and operate on fields
+transparently. The public backend name stays ``ComputeBackend.NEON``; Carbon
+is the implementation underneath.
 """
 
-import neon
+import carbon
 from .grid import Grid
 from xlb.precision_policy import Precision
 from xlb.compute_backend import ComputeBackend
@@ -15,11 +16,11 @@ from xlb import DefaultConfig
 
 
 class NeonGrid(Grid):
-    """Dense single-resolution grid on the Neon backend.
+    """Dense single-resolution grid on the Carbon backend (public name: NEON).
 
-    Wraps a ``neon.dense.dGrid``.  The grid is initialized with the LBM
-    stencil derived from the provided *velocity_set* so that Neon can
-    set up the correct halo exchanges for neighbour communication.
+    Wraps a ``carbon.Dense``. The grid is sized to the bounding box and given a
+    halo thick enough for the LBM stencil derived from *velocity_set* so Carbon
+    sets up the correct z-halo exchanges for neighbour communication.
 
     Parameters
     ----------
@@ -29,8 +30,8 @@ class NeonGrid(Grid):
     velocity_set : VelocitySet
         Lattice velocity set whose stencil defines neighbour connectivity.
     backend_config : dict, optional
-        Neon backend configuration.  Must contain ``"device_list"`` (list
-        of GPU device indices).  Defaults to ``{"device_list": [0]}``.
+        Backend configuration.  Must contain ``"device_list"`` (list of GPU
+        device indices).  Defaults to ``{"device_list": [0]}``.
     """
 
     def __init__(
@@ -44,7 +45,7 @@ class NeonGrid(Grid):
         if backend_config is None:
             backend_config = {
                 "device_list": [0],
-                "skeleton_config": neon.SkeletonConfig.OCC.none(),
+                "skeleton_config": carbon.SkeletonConfig.OCC.none(),
             }
 
         # check that the config dictionary has the required keys
@@ -72,28 +73,29 @@ class NeonGrid(Grid):
         return self.velocity_set
 
     def _initialize_backend(self):
+        # NOTE: device subset selection (dev_idx_list) is not yet plumbed through the
+        # Carbon C-ABI; Carbon uses every visible CUDA device (honour CUDA_VISIBLE_DEVICES
+        # to restrict). Tracked as a follow-up. We still record the requested list.
         dev_idx_list = self.config["device_list"]
 
         if len(self.shape) == 2:
-            import py_neon
-
-            self.dim = py_neon.Index_3d(self.shape[0], 1, self.shape[1])
-            self.neon_stencil = []
-            for q in range(self.velocity_set.q):
-                xval, yval = self.velocity_set._c[:, q]
-                self.neon_stencil.append([xval, 0, yval])
-
+            self.dim = carbon.Index_3d(self.shape[0], 1, self.shape[1])
+            self.neon_stencil = [[int(self.velocity_set._c[0, q]), 0, int(self.velocity_set._c[1, q])] for q in range(self.velocity_set.q)]
         else:
-            self.dim = neon.Index_3d(self.shape[0], self.shape[1], self.shape[2])
+            self.dim = carbon.Index_3d(self.shape[0], self.shape[1], self.shape[2])
+            self.neon_stencil = [[int(self.velocity_set._c[0, q]), int(self.velocity_set._c[1, q]), int(self.velocity_set._c[2, q])] for q in range(self.velocity_set.q)]
 
-            self.neon_stencil = []
-            for q in range(self.velocity_set.q):
-                xval, yval, zval = self.velocity_set._c[:, q]
-                self.neon_stencil.append([xval, yval, zval])
+        # Halo thickness = Chebyshev radius of the stencil (1 for standard LBM lattices).
+        halo_radius = 1
+        for offset in self.neon_stencil:
+            halo_radius = max(halo_radius, abs(offset[0]), abs(offset[1]), abs(offset[2]))
 
-        self.bk = neon.Backend(runtime=neon.Backend.Runtime.stream, dev_idx_list=dev_idx_list)
-        # self.bk.info_print()
-        self.grid = neon.dense.dGrid(backend=self.bk, dim=self.dim, sparsity=None, stencil=self.neon_stencil)
+        gate = DefaultConfig.carbon_gate
+        if gate is None:
+            raise RuntimeError("Carbon runtime not initialized; call xlb.init(..., default_backend=ComputeBackend.NEON, ...) first")
+
+        self.bk = carbon.System(gate)
+        self.grid = carbon.Dense(self.bk, self.dim.x, self.dim.y, self.dim.z, halo_radius=halo_radius)
 
     def create_field(
         self,
@@ -116,7 +118,7 @@ class NeonGrid(Grid):
 
         Returns
         -------
-        neon.dense.dField
+        carbon.DenseField
             The newly allocated field.
         """
         dtype = dtype.wp_dtype if dtype else DefaultConfig.default_precision_policy.store_precision.wp_dtype
@@ -132,5 +134,5 @@ class NeonGrid(Grid):
         return field
 
     def get_neon_backend(self):
-        """Return the underlying ``neon.Backend`` instance."""
+        """Return the underlying ``carbon.System`` instance (public name: neon backend)."""
         return self.bk

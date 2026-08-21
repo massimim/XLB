@@ -303,12 +303,12 @@ class MomentumTransfer(Operator):
         return self.force.numpy()[0]
 
     def _construct_neon(self):
-        import neon
+        import carbon
 
-        # Use the warp functional for the NEON backend
+        # Use the warp functional for the Carbon backend
         functional, _ = self._construct_warp()
 
-        @neon.Container.factory(name="MomentumTransfer")
+        @carbon.kernel(name="MomentumTransfer")
         def container(
             f_0: Any,
             f_1: Any,
@@ -316,7 +316,7 @@ class MomentumTransfer(Operator):
             missing_mask: Any,
             force: Any,
         ):
-            def container_launcher(loader: neon.Loader):
+            def container_launcher(loader: carbon.Loader):
                 loader.set_grid(bc_mask.get_grid())
                 bc_mask_pn = loader.get_write_handle(bc_mask)
                 missing_mask_pn = loader.get_write_handle(missing_mask)
@@ -350,15 +350,13 @@ class MomentumTransfer(Operator):
         missing_mask,
         stream=0,
     ):
-        import neon
-
         # Ensure the force is initialized to zero
         self.force *= self.compute_dtype(0.0)
 
-        # Define the neon functionals needed for this operation
+        # Define the carbon functionals needed for this operation
         self.fetcher_functional = self.fetcher.neon_functional
 
-        # Launch the neon container
+        # Launch the carbon container
         c = self.neon_container(f_0, f_1, bc_mask, missing_mask, self.force)
-        c.run(stream, container_runtime=neon.Container.ContainerRuntime.neon)
+        c.run(stream)
         return self.force.numpy()[0]

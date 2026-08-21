@@ -250,7 +250,6 @@ class Operator:
                 field[direction, index[0], index[1], index[2]] = value
 
         elif self.compute_backend == ComputeBackend.NEON:
-            import neon
 
             @wp.func
             def read_field(
@@ -295,8 +294,6 @@ class Operator:
                 return field[direction, neighbor[0], neighbor[1], neighbor[2]]
 
         elif self.compute_backend == ComputeBackend.NEON:
-            import neon
-            # from neon.multires.mPartition import neon_get_type
 
             @wp.func
             def read_field_neighbor(
