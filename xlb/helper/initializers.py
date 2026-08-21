@@ -220,17 +220,17 @@ class CustomInitializer(Operator):
         return f_field
 
     def _construct_neon(self):
-        import neon
+        import carbon
 
-        # Use the warp functional for the NEON backend
+        # Use the warp functional for the Carbon backend
         functional, _ = self._construct_warp()
 
-        @neon.Container.factory(name="CustomInitializer")
+        @carbon.kernel(name="CustomInitializer")
         def container(
             bc_mask: Any,
             f_field: Any,
         ):
-            def launcher(loader: neon.Loader):
+            def launcher(loader: carbon.Loader):
                 loader.set_grid(f_field.get_grid())
                 f_field_pn = loader.get_write_handle(f_field)
                 bc_mask_pn = loader.get_read_handle(bc_mask)
@@ -248,11 +248,9 @@ class CustomInitializer(Operator):
 
     @Operator.register_backend(ComputeBackend.NEON)
     def neon_implementation(self, bc_mask, f_field, stream=0):
-        import neon
-
-        # Launch the neon container
+        # Launch the carbon container
         c = self.neon_container(bc_mask, f_field)
-        c.run(stream, container_runtime=neon.Container.ContainerRuntime.neon)
+        c.run(stream)
         return f_field
 
 

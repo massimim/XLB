@@ -390,17 +390,17 @@ class ToJAX(object):
             self.warp_field = grid_dense.create_field(cardinality=self.field_cardinality, dtype=self.store_precision)
 
     def copy_neon_to_warp(self, neon_field):
-        """Convert a dense neon field to a warp field by copying."""
+        """Convert a dense Carbon field to a warp field by copying."""
         import warp as wp
-        import neon
+        import carbon
         from typing import Any
 
         assert neon_field.get_grid().name == "dGrid", "to_warp only supports dense grids"
         _d = self.velocity_set.d
 
-        @neon.Container.factory("to_warp")
+        @carbon.kernel("to_warp")
         def container(src_field: Any, dst_field: Any, cardinality: wp.int32):
-            def loading_step(loader: neon.Loader):
+            def loading_step(loader: carbon.Loader):
                 loader.set_grid(src_field.get_grid())
                 src_pn = loader.get_read_handle(src_field)
 

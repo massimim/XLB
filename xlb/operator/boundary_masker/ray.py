@@ -119,12 +119,12 @@ class MeshMaskerRay(MeshBoundaryMasker):
         )
 
     def _construct_neon(self):
-        import neon
+        import carbon
 
-        # Use the warp functional for the NEON backend
+        # Use the warp functional for the Carbon backend
         functional, _ = self._construct_warp()
 
-        @neon.Container.factory(name="MeshMaskerRay")
+        @carbon.kernel(name="MeshMaskerRay")
         def container(
             mesh_id: Any,
             id_number: Any,
@@ -133,7 +133,7 @@ class MeshMaskerRay(MeshBoundaryMasker):
             missing_mask: Any,
             needs_mesh_distance: Any,
         ):
-            def ray_launcher(loader: neon.Loader):
+            def ray_launcher(loader: carbon.Loader):
                 loader.set_grid(bc_mask.get_grid())
                 bc_mask_pn = loader.get_write_handle(bc_mask)
                 missing_mask_pn = loader.get_write_handle(missing_mask)
@@ -167,11 +167,9 @@ class MeshMaskerRay(MeshBoundaryMasker):
         missing_mask,
     ):
         # Prepare inputs
-        import neon
-
         mesh_id, bc_id = self._prepare_kernel_inputs(bc, bc_mask)
 
-        # Launch the appropriate neon container
+        # Launch the appropriate carbon container
         c = self.neon_container(mesh_id, bc_id, distances, bc_mask, missing_mask, wp.static(bc.needs_mesh_distance))
-        c.run(0, container_runtime=neon.Container.ContainerRuntime.neon)
+        c.run(0)
         return distances, bc_mask, missing_mask
