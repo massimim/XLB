@@ -81,6 +81,10 @@ def init(velocity_set, default_backend, default_precision_policy):
         import warp as wp
         import neon
 
+        # Warp 1.16 generates adjoint (backward) code by default. XLB's legacy
+        # @wp.func patterns fail NVRTC adjoint compilation, and LBM runs are
+        # forward-only, so disable backward codegen before any kernels build.
+        wp.config.enable_backward = False
         # wp.config.mode = "release"
         # wp.config.llvm_cuda = False
         # wp.config.verbose = True
@@ -89,7 +93,7 @@ def init(velocity_set, default_backend, default_precision_policy):
         _warp_init_and_select_cuda_device()
 
         # It's a good idea to always clear the kernel cache when developing new native or codegen features
-        wp.build.clear_kernel_cache()
+        wp.clear_kernel_cache()
 
         # !!! DO THIS BEFORE DEFINING/USING ANY KERNELS WITH CUSTOM TYPES
         neon.init()

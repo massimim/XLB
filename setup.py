@@ -30,7 +30,7 @@ def _uninstall_warp_lang(*, reason: str) -> None:
         print(f"[xlb] Warning: failed to uninstall warp-lang: {exc}")
 
 
-_NEON_VERSION = "0.5.2a1"
+_NEON_VERSION = "0.5.2a3"
 _NEON_RELEASE_URL = f"https://github.com/Autodesk/Neon/releases/download/v{_NEON_VERSION}"
 
 
