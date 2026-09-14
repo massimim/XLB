@@ -80,7 +80,7 @@ class MeshBoundaryMasker(Operator):
             dist1 = wp.dot(normal, corner - verts[0])
             dist2 = wp.dot(normal, wp.vec3f(1.0, 1.0, 1.0) - corner - verts[0])
 
-            edges = wp.transpose(wp.matrix_from_rows(verts[1] - verts[0], verts[2] - verts[1], verts[0] - verts[2]))
+            edges = wp.transpose(wp.matrix_from_cols(verts[1] - verts[0], verts[2] - verts[1], verts[0] - verts[2]))
             normal_edge0 = wp.mat33f(0.0)
             normal_edge1 = wp.mat33f(0.0)
             dist_edge = wp.mat33f(0.0)
@@ -141,7 +141,7 @@ class MeshBoundaryMasker(Operator):
                 v2 = wp.mesh_eval_position(mesh_id, f, 0.0, 0.0)
                 normal = wp.mesh_eval_face_normal(mesh_id, f)
 
-                v = wp.transpose(wp.matrix_from_rows(v0, v1, v2))
+                v = wp.transpose(wp.matrix_from_cols(v0, v1, v2))
 
                 # TODO: run this on triangles in advance
                 dist1, dist2, normal_edge0, normal_edge1, dist_edge = pre_compute(verts=v, normal=normal)
