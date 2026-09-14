@@ -194,6 +194,10 @@ if __name__ == "__main__":
     else:
         raise ValueError("Invalid velocity set")
 
+    # This example differentiates through the solver with wp.Tape, so it needs
+    # the adjoint kernels that xlb.init() otherwise switches off.
+    os.environ["XLB_WARP_ENABLE_BACKWARD"] = "1"
+
     # Initialize XLB
     xlb.init(
         velocity_set=velocity_set,

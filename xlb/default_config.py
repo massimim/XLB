@@ -35,6 +35,26 @@ class DefaultConfig:
     default_backend = None
 
 
+_ENABLE_BACKWARD_ENV = "XLB_WARP_ENABLE_BACKWARD"
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _configure_warp_backward_codegen():
+    """Turn off Warp's adjoint (backward) code generation unless opted in.
+
+    Warp emits an adjoint version of every kernel by default, which roughly
+    doubles codegen and compile time. XLB's LBM solvers are forward-only, and on
+    the Neon backend the legacy ``@wp.func`` patterns fail NVRTC adjoint
+    compilation outright.
+
+    Set ``XLB_WARP_ENABLE_BACKWARD=1`` for scripts that differentiate through
+    the solver; ``examples/out_of_core/autodiff_lbm.py`` needs it for ``wp.Tape``.
+    """
+    import warp as wp
+
+    wp.config.enable_backward = os.environ.get(_ENABLE_BACKWARD_ENV, "").strip().lower() in _TRUTHY
+
+
 def _warp_init_and_select_cuda_device():
     """Initialize Warp and pin the default CUDA device for single-GPU XLB runs.
 
@@ -43,6 +63,10 @@ def _warp_init_and_select_cuda_device():
     to choose which GPU Warp uses; defaults to ``cuda:0`` when unset.
     """
     import warp as wp
+
+    # Must precede kernel construction: Warp captures enable_backward into a
+    # module's options when that module's first kernel is created.
+    _configure_warp_backward_codegen()
 
     wp.init()  # TODO: Must be removed in the future versions of WARP
     if wp.get_cuda_device_count() == 0:
@@ -81,10 +105,6 @@ def init(velocity_set, default_backend, default_precision_policy):
         import warp as wp
         import neon
 
-        # Warp 1.16 generates adjoint (backward) code by default. XLB's legacy
-        # @wp.func patterns fail NVRTC adjoint compilation, and LBM runs are
-        # forward-only, so disable backward codegen before any kernels build.
-        wp.config.enable_backward = False
         # wp.config.mode = "release"
         # wp.config.llvm_cuda = False
         # wp.config.verbose = True
