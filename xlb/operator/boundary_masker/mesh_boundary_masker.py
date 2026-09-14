@@ -208,6 +208,14 @@ class MeshBoundaryMasker(Operator):
             points=wp.array(mesh_vertices, dtype=wp.vec3),
             indices=wp.array(mesh_indices, dtype=wp.int32),
         )
+        # Only the integer ``mesh.id`` is passed to the kernels, which does not keep
+        # the Mesh's device arrays (points/indices/BVH) alive. On the Neon backend the
+        # container is NVRTC-compiled seconds after this function returns, giving Python
+        # time to free the Mesh, so the kernel would dereference freed BVH memory.
+        if not hasattr(self, "_retained_meshes"):
+            self._retained_meshes = []
+        self._retained_meshes.append(mesh)
+
         mesh_id = wp.uint64(mesh.id)
         bc_id = bc.id
         return mesh_id, bc_id
