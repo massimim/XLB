@@ -28,34 +28,47 @@ class DefaultConfig:
         Active lattice velocity set.
     default_backend : ComputeBackend or None
         Active compute backend.
+    enable_backward : bool or None
+        Whether Warp generates adjoint (backward) kernels; resolved by
+        :func:`init`. ``None`` until initialized, and stays ``None`` on the JAX
+        backend, which does not use Warp.
     """
 
     default_precision_policy = None
     velocity_set = None
     default_backend = None
+    enable_backward = None
 
 
 _ENABLE_BACKWARD_ENV = "XLB_WARP_ENABLE_BACKWARD"
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
-def _configure_warp_backward_codegen():
-    """Turn off Warp's adjoint (backward) code generation unless opted in.
+def _resolve_enable_backward(enable_backward):
+    """Decide whether Warp should generate adjoint (backward) kernels.
+
+    An explicit ``True``/``False`` from :func:`init` wins. When it is ``None``,
+    fall back to ``XLB_WARP_ENABLE_BACKWARD`` and then to off.
+    """
+    if enable_backward is not None:
+        return bool(enable_backward)
+    return os.environ.get(_ENABLE_BACKWARD_ENV, "").strip().lower() in _TRUTHY
+
+
+def _configure_warp_backward_codegen(enable_backward):
+    """Apply the resolved backward-codegen choice to Warp's global config.
 
     Warp emits an adjoint version of every kernel by default, which roughly
     doubles codegen and compile time. XLB's LBM solvers are forward-only, and on
     the Neon backend the legacy ``@wp.func`` patterns fail NVRTC adjoint
-    compilation outright.
-
-    Set ``XLB_WARP_ENABLE_BACKWARD=1`` for scripts that differentiate through
-    the solver; ``examples/out_of_core/autodiff_lbm.py`` needs it for ``wp.Tape``.
+    compilation outright, so XLB leaves adjoints off unless asked.
     """
     import warp as wp
 
-    wp.config.enable_backward = os.environ.get(_ENABLE_BACKWARD_ENV, "").strip().lower() in _TRUTHY
+    wp.config.enable_backward = enable_backward
 
 
-def _warp_init_and_select_cuda_device():
+def _warp_init_and_select_cuda_device(enable_backward):
     """Initialize Warp and pin the default CUDA device for single-GPU XLB runs.
 
     With multiple GPUs, Warp's default device for allocations and launches can
@@ -66,7 +79,7 @@ def _warp_init_and_select_cuda_device():
 
     # Must precede kernel construction: Warp captures enable_backward into a
     # module's options when that module's first kernel is created.
-    _configure_warp_backward_codegen()
+    _configure_warp_backward_codegen(enable_backward)
 
     wp.init()  # TODO: Must be removed in the future versions of WARP
     if wp.get_cuda_device_count() == 0:
@@ -81,7 +94,7 @@ def _warp_init_and_select_cuda_device():
             pass
 
 
-def init(velocity_set, default_backend, default_precision_policy):
+def init(velocity_set, default_backend, default_precision_policy, enable_backward=None):
     """Initialize the global XLB configuration.
 
     Must be called before creating any grid, operator, or field.
@@ -94,13 +107,21 @@ def init(velocity_set, default_backend, default_precision_policy):
         Compute backend to use (JAX, WARP, or NEON).
     default_precision_policy : PrecisionPolicy
         Precision policy for compute and storage dtypes.
+    enable_backward : bool, optional
+        Whether Warp generates adjoint (backward) kernels. Pass ``True`` when
+        differentiating through the solver with ``wp.Tape``; leaving it off
+        roughly halves kernel codegen and compile time, and is required on the
+        Neon backend, whose ``@wp.func`` patterns fail NVRTC adjoint
+        compilation. Defaults to the ``XLB_WARP_ENABLE_BACKWARD`` environment
+        variable, or off when that is unset. Ignored on the JAX backend.
     """
     DefaultConfig.velocity_set = velocity_set
     DefaultConfig.default_backend = default_backend
     DefaultConfig.default_precision_policy = default_precision_policy
 
     if default_backend == ComputeBackend.WARP:
-        _warp_init_and_select_cuda_device()
+        DefaultConfig.enable_backward = _resolve_enable_backward(enable_backward)
+        _warp_init_and_select_cuda_device(DefaultConfig.enable_backward)
     elif default_backend == ComputeBackend.NEON:
         import warp as wp
         import neon
@@ -110,7 +131,8 @@ def init(velocity_set, default_backend, default_precision_policy):
         # wp.config.verbose = True
         # wp.verbose_warnings = True
 
-        _warp_init_and_select_cuda_device()
+        DefaultConfig.enable_backward = _resolve_enable_backward(enable_backward)
+        _warp_init_and_select_cuda_device(DefaultConfig.enable_backward)
 
         # It's a good idea to always clear the kernel cache when developing new native or codegen features
         wp.clear_kernel_cache()
