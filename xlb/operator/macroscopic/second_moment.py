@@ -59,10 +59,7 @@ class SecondMoment(Operator):
         _cc = self.velocity_set.cc
         _f_vec = wp.types.vector(length=self.velocity_set.q, dtype=self.compute_dtype)
         _pi_dim = self.velocity_set.d * (self.velocity_set.d + 1) // 2
-        _pi_vec = wp.types.vector(length=
-            _pi_dim,
-            dtype=self.compute_dtype,
-        )
+        _pi_vec = wp.types.vector(length=_pi_dim, dtype=self.compute_dtype)
 
         # Construct functional for computing second moment
         @wp.func

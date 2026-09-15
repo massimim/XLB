@@ -6,6 +6,7 @@ set, compute backend, and precision policy.  All operators read their
 defaults from :class:`DefaultConfig` when explicit arguments are omitted.
 """
 
+import contextlib
 import os
 
 from xlb.compute_backend import ComputeBackend
@@ -88,10 +89,9 @@ def _warp_init_and_select_cuda_device(enable_backward):
     try:
         wp.set_device(choice)
     except Exception:
-        try:
+        # Fall back to the first GPU; if that fails too, leave Warp's own default.
+        with contextlib.suppress(Exception):
             wp.set_device("cuda:0")
-        except Exception:
-            pass
 
 
 def init(velocity_set, default_backend, default_precision_policy, enable_backward=None):
