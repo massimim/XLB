@@ -177,13 +177,14 @@ print(json.dumps(out))
 
 
 def warn_on_mixed_warp(stack: dict[str, str]) -> str:
-    """Flag a Neon env that still has the ``warp-lang`` distribution registered.
+    """Flag a Neon env that also has the ``warp-lang`` distribution registered.
 
     ``neon_gpu`` ships its own Warp fork at the same ``site-packages/warp``
-    path, and XLB's ``install_requires`` pulls ``warp-lang`` in regardless of
-    the ``[neon]`` extra. When both are recorded, whichever pip unpacked last
-    owns the files, and a later ``pip uninstall warp-lang`` would delete files
-    Neon needs. Tests still pass here, so this is only detectable by looking.
+    path. XLB's ``[neon]`` extra no longer pulls ``warp-lang`` in, but pip does
+    not remove one that was installed beforehand, so a reused venv can still
+    hold both. Whichever pip unpacked last owns the files, and a later
+    ``pip uninstall warp-lang`` would delete files Neon needs. Tests pass either
+    way, so this is only detectable by looking.
     """
     if stack.get("neon") != "importable" or stack.get("warp_lang_dist") == "absent":
         return ""
