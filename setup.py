@@ -55,10 +55,10 @@ setup(
     ],
     extras_require={
         # Exactly one of [warp] and [neon] is required; see the note above.
-        # Pinned to the 1.16 series: XLB's kernels target the Warp 1.16 API, and
-        # this keeps the extra on the same API as the 1.16 fork that neon_gpu
-        # bundles, so both extras behave the same.
-        "warp": ["warp-lang>=1.16,<1.17"],
+        # Bounded to the versions the suite has been run against: 1.16, the API
+        # XLB's kernels target and the series of the fork neon_gpu bundles, and
+        # 1.17. A fresh install takes 1.17; pin warp-lang==1.16.* to match Neon.
+        "warp": ["warp-lang>=1.16,<1.18"],
         "cuda": ["jax[cuda13]>=0.8.2"],  # For CUDA installations (pip install -U "jax[cuda13]")
         "tpu": ["jax[tpu]>=0.8.2"],  # For TPU installations
         # h5py: MultiresIO / Neon multi-resolution export to HDF5 (see xlb.utils.mesher).
