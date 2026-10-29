@@ -230,6 +230,7 @@ def bc_profile(precision_policy, grid_shape, u_max):
     u_max_d = _dtype(u_max)
     L_y = _dtype(grid_shape[1] - 1)
     L_z = _dtype(grid_shape[2] - 1)
+    _u_normal_vec = wp.types.vector(length=1, dtype=_dtype)
 
     @wp.func
     def bc_profile_warp(index: wp.vec3i):
@@ -239,7 +240,7 @@ def bc_profile(precision_policy, grid_shape, u_max):
         z_center = z - (L_z / _dtype(2.0))
         r_sq = ((_dtype(2.0) * y_center) / L_y) ** _dtype(2.0) + ((_dtype(2.0) * z_center) / L_z) ** _dtype(2.0)
         velocity_x = u_max_d * wp.max(_dtype(0.0), _dtype(1.0) - r_sq)
-        return wp.vector(velocity_x, length=1)
+        return _u_normal_vec(velocity_x)
 
     return bc_profile_warp
 
